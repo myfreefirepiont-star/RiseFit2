@@ -25,6 +25,30 @@ jobs:
       - name: Extract project
         run: find . -name "*.zip" -exec unzip -o {} -d extracted \;
 
+      - name: Patch missing imports
+        run: |
+          python3 - <<'EOF'
+          import glob, re
+          MAP = {
+            'AlarmManager': 'import android.app.AlarmManager',
+            'PendingIntent': 'import android.app.PendingIntent',
+            'NotificationChannel': 'import android.app.NotificationChannel',
+            'NotificationManager': 'import android.app.NotificationManager',
+            'NotificationCompat': 'import androidx.core.app.NotificationCompat',
+            'Context': 'import android.content.Context',
+            'Intent': 'import android.content.Intent',
+          }
+          for f in glob.glob('extracted/**/*.kt', recursive=True):
+              s = open(f).read()
+              add = [imp for key, imp in MAP.items() if key in s and imp not in s]
+              if add:
+                  m = re.search(r'(?m)^package .*$', s)
+                  idx = m.end() if m else 0
+                  s = s[:idx] + '\n' + '\n'.join(add) + s[idx:]
+                  open(f, 'w').write(s)
+                  print('patched', f)
+          EOF
+
       - name: Build APK
         run: |
           PROJ=$(dirname "$(find extracted -name settings.gradle | head -1)")
